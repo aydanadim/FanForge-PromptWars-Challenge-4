@@ -31,7 +31,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. BACKEND: MOCK GENAI ORCHESTRATION ---
+# --- 2. BACKEND: MULTILINGUAL INTENT-AWARE ENGINE ---
 def get_translated_welcome(language, time_context):
     translations = {
         "English": {"pre": "Welcome to the stadium! Kickoff is approaching.", "match": "Live match in progress! Feel the energy.", "post": "What a match! Have a safe trip home."},
@@ -41,6 +41,63 @@ def get_translated_welcome(language, time_context):
     }
     phase = "pre" if "Pre-Match" in time_context else "match" if "Match-Time" in time_context else "post"
     return translations.get(language, translations["English"])[phase]
+
+def get_smart_ai_response(prompt, language):
+    """Parses keywords natively to mimic a live vector-based RAG pipeline."""
+    p = prompt.lower()
+    
+    # Keyword Lists across supported languages
+    restroom_words = ["restroom", "bathroom", "washroom", "toilet", "toilettes", "baño", "sanitario", "wc", "शौचालय", "टॉयलेट", "बाथरूम"]
+    food_words = ["food", "snack", "restaurant", "drink", "water", "hungry", "burger", "hotdog", "comida", "restaurante", "nourriture", "manger", "खाना", "भोजन", "नाश्ता", "रेस्टोरेंट", "भूख"]
+    gate_words = ["gate", "exit", "entry", "entrance", "navigation", "map", "puerta", "salida", "porte", "entrée", "गेट", "द्वार", "रास्ता", "निकास", "प्रवेश"]
+    score_words = ["score", "match", "win", "goal", "playing", "marcador", "resultado", "स्कोर", "मैच", "गोल", "रन"]
+
+    # Structural Multilingual Responses Matrix
+    knowledge_base = {
+        "English": {
+            "restroom": "🧻 **Facility Locator:** The nearest accessible restroom is 40 meters away behind Section 114. The queue is currently empty.",
+            "food": "🍔 **Concessions:** Concession Stand C (2 mins away) has zero wait time for hotdogs, nachos, and cold beverages right now.",
+            "gate": "🚶 **Navigation:** Gate B is a 4-minute walk from your current zone. Traffic flow is clear, making it the fastest exit strategy.",
+            "score": "⚽ **Match Update:** The score is currently tied at 0-0 in the 35th minute. Team statistics are updating live.",
+            "default": "🤖 **FanForge Engine:** I registered your request! Fetching real-time logistical maps for your exact section coordinates."
+        },
+        "Spanish": {
+            "restroom": "🧻 **Localizador:** El baño más cercano está a 40 metros detrás de la Sección 114. Actualmente sin fila.",
+            "food": "🍔 **Alimentos:** El puesto C (a 2 min) tiene tiempo de espera cero para hot dogs y bebidas heladas.",
+            "gate": "🚶 **Navegación:** La Puerta B está a 4 minutos a pie. El flujo de personas está despejado para una salida rápida.",
+            "score": "⚽ **Actualización:** El marcador está 0-0 en el minuto 35. Las estadísticas se actualizan en vivo.",
+            "default": "🤖 **Motor FanForge:** ¡Recibí tu consulta! Buscando mapas logísticos en tiempo real para tu sección."
+        },
+        "French": {
+            "restroom": "🧻 **Localisateur:** Les toilettes les plus proches sont à 40 mètres derrière la Section 114. Aucune attente.",
+            "food": "🍔 **Restauration:** Le stand C (à 2 min) n'a aucune attente pour les hot-dogs et les boissons fraîches en ce moment.",
+            "gate": "🚶 **Navigation:** La Porte B est à 4 minutes à pied. Le flux est fluide pour une évacuation rapide.",
+            "score": "⚽ **Direct:** Le score est de 0-0 à la 35ème minute. Les statistiques du match s'actualisent.",
+            "default": "🤖 **Assistant FanForge:** Requête bien reçue! Recherche des données logistiques en temps réel pour votre zone."
+        },
+        "Hindi": {
+            "restroom": "🧻 **सुविधा केंद्र:** निकटतम शौचालय धारा 114 के ठीक पीछे 40 मीटर की दूरी पर है। अभी वहां कोई भीड़ नहीं है।",
+            "food": "🍔 **खान-पान:** काउंटर C (2 मिनट की दूरी पर) पर अभी हॉटडॉग और ठंडे पेय पदार्थों के लिए बिल्कुल प्रतीक्षा समय नहीं है।",
+            "gate": "🚶 **मार्गदर्शन:** गेट B आपके वर्तमान क्षेत्र से 4 मिनट की पैदल दूरी पर है। निकासी के लिए यह मार्ग बिल्कुल साफ है।",
+            "score": "⚽ **मैच अपडेट:** 35वें मिनट में स्कोर अभी 0-0 से बराबर है। दोनों टीमों का मुकाबला कड़ा चल रहा है।",
+            "default": "🤖 **फैनफोर्ज इंजन:** मुझे आपका अनुरोध मिल गया है! मैं आपके स्टैंड के अनुसार रीयल-टाइम जानकारी खोज रहा हूँ।"
+        }
+    }
+
+    # Fetch language cluster
+    lang_responses = knowledge_base.get(language, knowledge_base["English"])
+
+    # Match intent
+    if any(word in p for word in restroom_words):
+        return lang_responses["restroom"]
+    elif any(word in p for word in food_words):
+        return lang_responses["food"]
+    elif any(word in p for word in gate_words):
+        return lang_responses["gate"]
+    elif any(word in p for word in score_words):
+        return lang_responses["score"]
+    else:
+        return lang_responses["default"]
 
 def get_dynamic_actions(time_context):
     if "Pre-Match" in time_context:
@@ -77,18 +134,17 @@ st.caption("Click the microphone button to speak naturally, or type below.")
 lang_codes = {"English": "en", "Spanish": "es", "French": "fr", "Hindi": "hi"}
 target_code = lang_codes.get(language, "en")
 
-# Initialize persistent session states if they don't exist
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "temp_voice_input" not in st.session_state:
     st.session_state.temp_voice_input = None
 
-# Render the Chat History first so the conversation stays visible
+# Render Chat History
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Render browser microphone interface
+# Render microphone component
 voice_text = speech_to_text(
     language=target_code,
     start_prompt="🎵 Tap to Speak",
@@ -98,25 +154,22 @@ voice_text = speech_to_text(
     key="voice_input"
 )
 
-# Catch the voice text when it returns and pin it to the session state
 if voice_text:
     st.session_state.temp_voice_input = voice_text
 
-# --- 🎛️ VOICE REVIEW STEP (Your New Request!) ---
+# Voice Review Loop
 if st.session_state.temp_voice_input:
     st.info(f"🔍 **Voice Transcription Review**\n\nHere is what I heard in **{language}**:\n\n> *\"{st.session_state.temp_voice_input}\"*")
     
     col_send, col_clear = st.columns(2)
     with col_send:
         if st.button("✅ Confirm & Send", use_container_width=True):
-            # 1. Commit user query to chat
             st.session_state.messages.append({"role": "user", "content": st.session_state.temp_voice_input})
             
-            # 2. Generate simulated assistant response
-            ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
+            # Run the input through our new smart intent engine
+            ai_reply = get_smart_ai_response(st.session_state.temp_voice_input, language)
             st.session_state.messages.append({"role": "assistant", "content": ai_reply})
             
-            # 3. Clear temporary buffer and refresh
             st.session_state.temp_voice_input = None
             st.rerun()
             
@@ -130,7 +183,9 @@ text_input = st.chat_input(f"Or type your query here... ({language})")
 
 if text_input:
     st.session_state.messages.append({"role": "user", "content": text_input})
-    ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
+    
+    # Run text through the smart intent engine
+    ai_reply = get_smart_ai_response(text_input, language)
     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
     st.rerun()
 

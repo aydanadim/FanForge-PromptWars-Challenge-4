@@ -1,104 +1,135 @@
 import streamlit as st
-import json
+from streamlit_mic_recorder import speech_to_text
+import time
 
-# Set up page config
-st.set_page_config(page_title="FanForge Mobile - FIFA 2026", page_icon="📱", layout="wide")
+# --- 1. PAGE CONFIGURATION & CUSTOM CSS ---
+st.set_page_config(page_title="FanForge | FIFA 2026", page_icon="⚽", layout="wide")
 
-# App Header
-st.title("📱 FanForge Mobile: Context-Aware UI/UX")
-st.caption("Phase 1 Prototype for PromptWars Challenge 4 — Driven by Dynamic Context Engine")
-st.markdown("---")
+st.markdown("""
+    <style>
+    .main {background-color: #FAFAFA;}
+    .app-title {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: #111827;
+        margin-bottom: 0px;
+        text-transform: uppercase;
+        letter-spacing: -1px;
+    }
+    .app-subtitle {
+        color: #6B7280;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-top: 0px;
+        margin-bottom: 2rem;
+    }
+    .stButton>button {
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- SIDEBAR: SIMULATED FAN CONTEXT ---
-st.sidebar.header("🗺️ Simulate Fan Context")
-st.sidebar.write("Adjust these variables to see how the GenAI dynamically orchestrates the mobile interface.")
+# --- 2. BACKEND: MOCK GENAI ORCHESTRATION ---
+def get_translated_welcome(language, time_context):
+    translations = {
+        "English": {"pre": "Welcome to the stadium! Kickoff is approaching.", "match": "Live match in progress! Feel the energy.", "post": "What a match! Have a safe trip home."},
+        "Spanish": {"pre": "¡Bienvenido al estadio! El inicio se acerca.", "match": "¡Partido en vivo! Siente la energía.", "post": "¡Qué partido! Buen viaje a casa."},
+        "French": {"pre": "Bienvenue au stade ! Le coup d'envoi approche.", "match": "Match en direct ! Ressentez l'énergie.", "post": "Quel match ! Bon retour chez vous."},
+        "Hindi": {"pre": "स्टेडियम में आपका स्वागत है! मैच जल्द ही शुरू होने वाला है।", "match": "लाइव मैच चल रहा है! ऊर्जा महसूस करें।", "post": "क्या शानदार मैच था! आपकी घर वापसी सुरक्षित हो।"}
+    }
+    phase = "pre" if "Pre-Match" in time_context else "match" if "Match-Time" in time_context else "post"
+    return translations.get(language, translations["English"])[phase]
 
-time_context = st.sidebar.selectbox(
-    "Match Day Timeline",
-    ["3 Hours Before Kickoff (Pre-Match)", "In-Stadium: 35th Minute (Match-Time)", "30 Mins Post-Match (Egress Phase)"]
+def get_dynamic_actions(time_context):
+    if "Pre-Match" in time_context:
+        return [("🎟️ Find My Seat (AR Vision)", "primary", True), ("🍔 Express Food Pre-order", "secondary", False), ("👕 Merchandise Map", "secondary", False)]
+    elif "Match-Time" in time_context:
+        return [("📊 Live Player Stats", "primary", True), ("💺 Report Spill/Issue", "secondary", False), ("🥤 Order Drink to Seat", "secondary", False)]
+    else:
+        return [("🚊 Smart Egress & Transit Route", "primary", True), ("🚕 Call Ride-Share", "secondary", False), ("⭐ Match Highlights", "secondary", False)]
+
+# --- 3. SIDEBAR: THE CONTEXT ENGINE ---
+with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/FIFA_World_Cup_2026_Logo.svg/1024px-FIFA_World_Cup_2026_Logo.svg.png", width=150)
+    st.markdown("### ⚙️ Simulator Controls")
+    language = st.selectbox("🌐 App Language", ["English", "Spanish", "French", "Hindi"])
+    time_context = st.selectbox("⏱️ Match Phase", ["3 Hours Before Kickoff (Pre-Match)", "In-Stadium: 35th Minute (Match-Time)", "30 Mins Post-Match (Egress Phase)"])
+    incident = st.toggle("🚨 Simulate Transit/Crowd Alert")
+
+# --- 4. MAIN UI: THE FAN EXPERIENCE ---
+st.markdown('<p class="app-title">⚽ FanForge</p>', unsafe_allow_html=True)
+st.markdown(f'<p class="app-subtitle">Your Official Matchday Companion • {language}</p>', unsafe_allow_html=True)
+
+if incident:
+    st.error("🚨 **LIVE UPDATE:** High foot traffic detected at Gate B. Rerouting map suggestions to Gate C for 15-min faster entry.")
+
+welcome_msg = get_translated_welcome(language, time_context)
+st.success(f"**{welcome_msg}**")
+st.divider()
+
+# --- 5. THE MULTILINGUAL AI VOICE ASSISTANT ---
+st.markdown("### 🎙️ FanForge Voice & Text Assistant")
+st.caption("Click the microphone button to speak naturally, or type below.")
+
+# Language ISO mapper for the speech recognizer engine
+lang_codes = {"English": "en", "Spanish": "es", "French": "fr", "Hindi": "hi"}
+target_code = lang_codes.get(language, "en")
+
+# Unified Chat History
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Render browser microphone interface (Zero Setup, Free Transcription)
+voice_text = speech_to_text(
+    language=target_code,
+    start_prompt="🎵 Tap to Speak",
+    stop_prompt="🛑 Stop Recording",
+    just_once=True,
+    use_container_width=True,
+    key="voice_input"
 )
 
-location_context = st.sidebar.selectbox(
-    "Fan's Live Location",
-    ["Outside Stadium (Transit/Gates)", "In Seat (Section 114, Row 12)", "Concourse Level (Near Gate B)"]
-)
+# Listen for keyboard input as fallback
+text_input = st.chat_input(f"Or type your query here... ({language})")
 
-ticket_context = st.sidebar.selectbox(
-    "Ticket Category",
-    ["Standard Category 3", "VIP Hospitality Suite"]
-)
+# Resolve which input was given
+active_prompt = voice_text if voice_text else text_input
 
-incident_context = st.sidebar.checkbox("Simulate Live Operational Incident (e.g., Transit Delay / Gate Bottleneck)")
+if active_prompt:
+    # Display the query in chat
+    with st.chat_message("user"):
+        st.markdown(active_prompt)
+    st.session_state.messages.append({"role": "user", "content": active_prompt})
+    
+    # Process answer based on context
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
+        response_placeholder.markdown(ai_reply)
+    st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-# --- MOCK GENAI ENGINE (Simulating JSON output from the System Prompt) ---
-def get_ai_orchestrated_ui(time, loc, ticket, incident):
-    # In production, this dictionary is generated live by your LLM prompt pipeline
-    if "Pre-Match" in time:
-        payload = {
-            "welcome_message": "Welcome to the Venue! Your match kicks off in 3 hours. Let's get you inside smoothly.",
-            "critical_alert": "Gate G is currently experiencing high volume. Please use Gate B for 15-minute faster entry." if incident else None,
-            "primary_action_button": {"label": "🗺️ Open VLM Vision Gate Navigation", "action_id": "vision_nav"},
-            "secondary_action_buttons": [
-                {"label": "🍔 Pre-order Match Day Snacks", "action_id": "food_order"},
-                {"label": "🎵 View Fan Zone Schedule", "action_id": "fan_zone"}
-            ],
-            "recommended_concession_or_service": "Merchandise Booth 4 near Section 110 has the shortest queue right now!"
-        }
-    elif "Match-Time" in time:
-        payload = {
-            "welcome_message": "You are watching live action! Score is currently 0-0.",
-            "critical_alert": "Heavy crowd reported at main restrooms on Concourse Level 1." if incident else None,
-            "primary_action_button": {"label": "🔊 Activate Multilingual Voice Assistant", "action_id": "voice_help"},
-            "secondary_action_buttons": [
-                {"label": "📊 View Live Match Stats", "action_id": "stats"},
-                {"label": "💺 Report an Issue at My Seat", "action_id": "report_issue"}
-            ],
-            "recommended_concession_or_service": "Enjoying the game from Section 114? Express delivery to Row 12 is active for beverages." if ticket == "VIP Hospitality Suite" else "Concession Stand C (2 mins away) has zero wait time for hotdogs right now."
-        }
-    else:  # Post-Match
-        payload = {
-            "welcome_message": "What a game! Thank you for being a part of FIFA World Cup 2026. Let's get you home safely.",
-            "critical_alert": "The local Metro Line 2 is experiencing a 20-minute operational delay." if incident else None,
-            "primary_action_button": {"label": "🚎 Generate Optimized Egress Route", "action_id": "egress_route"},
-            "secondary_action_buttons": [
-                {"label": "🚗 Call Ride-Share (Zone 3)", "action_id": "rideshare"},
-                {"label": "⭐ Rate Your Stadium Experience", "action_id": "feedback"}
-            ],
-            "recommended_concession_or_service": "Sustainability Reward: Scan your digital cup at Exit Gate 3 to claim your zero-waste tournament badge!"
-        }
-    return payload
+st.divider()
 
-# Execute the orchestration
-ui_data = get_ai_orchestrated_ui(time_context, location_context, ticket_context, incident_context)
+# --- 6. DYNAMIC QUICK ACTIONS ---
+st.markdown("### ⚡ Quick Actions")
+actions = get_dynamic_actions(time_context)
 
-# --- MAIN APP DISPLAY: THE DYNAMIC FAN INTERFACE ---
+primary_action = actions[0]
+if st.button(primary_action[0], type="primary", use_container_width=True):
+    if primary_action[2]:
+        st.balloons()
+    st.toast(f"Launching {primary_action[0]}...", icon="🚀")
 
-# 1. Critical Alerts Zone (Renders only if AI payload demands it)
-if ui_data["critical_alert"]:
-    st.error(f"⚠️ **LIVE OPERATIONAL UPDATE:** {ui_data['critical_alert']}")
-
-# 2. Dynamic Hero Header
-st.info(f"🏟️ **FanForge AI Companion**\n\n{ui_data['welcome_message']}")
-
-# 3. Personalized Recommendation Banner
-st.success(f"💡 **Smart Recommendation:** {ui_data['recommended_concession_or_service']}")
-
-st.write("### Quick Actions")
-
-# 4. Primary Call-to-Action (Large and prominent)
-if st.button(ui_data["primary_action_button"]["label"], use_container_width=True, type="primary"):
-    st.balloons()
-    st.write(f"Triggered Core Flow: `{ui_data['primary_action_button']['action_id']}`")
-
-# 5. Secondary Options (Grid layout)
-cols = st.columns(len(ui_data["secondary_action_buttons"]))
-for index, btn in enumerate(ui_data["secondary_action_buttons"]):
-    with cols[index]:
-        if st.button(btn["label"], use_container_width=True):
-            st.write(f"Triggered Secondary Flow: `{btn['action_id']}`")
-
-# --- BEHIND THE SCENES PROMPT INSPECTOR FOR JUDGES ---
-st.markdown("---")
-with st.expander("🛠️ View Prompt Engineering & Live JSON Structure (Submission Value)"):
-    st.write("This interface is completely headless. Below is the raw structural payload generated by the FanForge backend prompt engine based on your selected context:")
-    st.json(ui_data)
+col1, col2 = st.columns(2)
+with col1:
+    if st.button(actions[1][0], use_container_width=True):
+         st.toast(f"Opening {actions[1][0]}...")
+with col2:
+    if st.button(actions[2][0], use_container_width=True):
+         st.toast(f"Opening {actions[2][0]}...")

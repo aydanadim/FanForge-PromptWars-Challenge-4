@@ -1,6 +1,8 @@
 import streamlit as st
 from streamlit_mic_recorder import speech_to_text
-import time
+import cv2
+import numpy as np
+from PIL import Image
 
 # --- 1. PAGE CONFIGURATION & CUSTOM CSS ---
 st.set_page_config(page_title="FanForge | FIFA 2026", page_icon="⚽", layout="wide")
@@ -43,16 +45,12 @@ def get_translated_welcome(language, time_context):
     return translations.get(language, translations["English"])[phase]
 
 def get_smart_ai_response(prompt, language):
-    """Parses keywords natively to mimic a live vector-based RAG pipeline."""
     p = prompt.lower()
-    
-    # Keyword Lists across supported languages
     restroom_words = ["restroom", "bathroom", "washroom", "toilet", "toilettes", "baño", "sanitario", "wc", "शौचालय", "टॉयलेट", "बाथरूम"]
     food_words = ["food", "snack", "restaurant", "drink", "water", "hungry", "burger", "hotdog", "comida", "restaurante", "nourriture", "manger", "खाना", "भोजन", "नाश्ता", "रेस्टोरेंट", "भूख"]
     gate_words = ["gate", "exit", "entry", "entrance", "navigation", "map", "puerta", "salida", "porte", "entrée", "गेट", "द्वार", "रास्ता", "निकास", "प्रवेश"]
     score_words = ["score", "match", "win", "goal", "playing", "marcador", "resultado", "स्कोर", "मैच", "गोल", "रन"]
 
-    # Structural Multilingual Responses Matrix
     knowledge_base = {
         "English": {
             "restroom": "🧻 **Facility Locator:** The nearest accessible restroom is 40 meters away behind Section 114. The queue is currently empty.",
@@ -66,7 +64,7 @@ def get_smart_ai_response(prompt, language):
             "food": "🍔 **Alimentos:** El puesto C (a 2 min) tiene tiempo de espera cero para hot dogs y bebidas heladas.",
             "gate": "🚶 **Navegación:** La Puerta B está a 4 minutos a pie. El flujo de personas está despejado para una salida rápida.",
             "score": "⚽ **Actualización:** El marcador está 0-0 en el minuto 35. Las estadísticas se actualizan en vivo.",
-            "default": "🤖 **Motor FanForge:** ¡Recibí tu consulta! Buscando mapas logísticos en tiempo real para tu sección."
+            "default": "🤖 **Motor FanForge:** ¡Recibী tu consulta! Buscando mapas logísticos en tiempo real para tu sección."
         },
         "French": {
             "restroom": "🧻 **Localisateur:** Les toilettes les plus proches sont à 40 mètres derrière la Section 114. Aucune attente.",
@@ -84,10 +82,8 @@ def get_smart_ai_response(prompt, language):
         }
     }
 
-    # Fetch language cluster
     lang_responses = knowledge_base.get(language, knowledge_base["English"])
 
-    # Match intent
     if any(word in p for word in restroom_words):
         return lang_responses["restroom"]
     elif any(word in p for word in food_words):
@@ -101,7 +97,7 @@ def get_smart_ai_response(prompt, language):
 
 def get_dynamic_actions(time_context):
     if "Pre-Match" in time_context:
-        return [("🎟️ Find My Seat (AR Vision)", "primary", True), ("🍔 Express Food Pre-order", "secondary", False), ("👕 Merchandise Map", "secondary", False)]
+        return [("🎟️ Find My Seat (Scan Ticket)", "primary", True), ("🍔 Express Food Pre-order", "secondary", False), ("👕 Merchandise Map", "secondary", False)]
     elif "Match-Time" in time_context:
         return [("📊 Live Player Stats", "primary", True), ("💺 Report Spill/Issue", "secondary", False), ("🥤 Order Drink to Seat", "secondary", False)]
     else:
@@ -128,9 +124,7 @@ st.divider()
 
 # --- 5. THE MULTILINGUAL AI VOICE ASSISTANT ---
 st.markdown("### 🎙️ FanForge Voice & Text Assistant")
-st.caption("Click the microphone button to speak naturally, or type below.")
 
-# Language ISO mapper for the speech recognizer engine
 lang_codes = {"English": "en", "Spanish": "es", "French": "fr", "Hindi": "hi"}
 target_code = lang_codes.get(language, "en")
 
@@ -138,6 +132,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "temp_voice_input" not in st.session_state:
     st.session_state.temp_voice_input = None
+if "scanner_active" not in st.session_state:
+    st.session_state.scanner_active = False
 
 # Render Chat History
 for message in st.session_state.messages:
@@ -160,19 +156,14 @@ if voice_text:
 # Voice Review Loop
 if st.session_state.temp_voice_input:
     st.info(f"🔍 **Voice Transcription Review**\n\nHere is what I heard in **{language}**:\n\n> *\"{st.session_state.temp_voice_input}\"*")
-    
     col_send, col_clear = st.columns(2)
     with col_send:
         if st.button("✅ Confirm & Send", use_container_width=True):
             st.session_state.messages.append({"role": "user", "content": st.session_state.temp_voice_input})
-            
-            # Run the input through our new smart intent engine
             ai_reply = get_smart_ai_response(st.session_state.temp_voice_input, language)
             st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-            
             st.session_state.temp_voice_input = None
             st.rerun()
-            
     with col_clear:
         if st.button("❌ Clear / Retry", use_container_width=True):
             st.session_state.temp_voice_input = None
@@ -180,27 +171,57 @@ if st.session_state.temp_voice_input:
 
 # Text Input Fallback
 text_input = st.chat_input(f"Or type your query here... ({language})")
-
 if text_input:
     st.session_state.messages.append({"role": "user", "content": text_input})
-    
-    # Run text through the smart intent engine
     ai_reply = get_smart_ai_response(text_input, language)
     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
     st.rerun()
 
 st.divider()
 
-# --- 6. DYNAMIC QUICK ACTIONS ---
+# --- 6. DYNAMIC QUICK ACTIONS & INTEGRATED TICKET SCANNER ---
 st.markdown("### ⚡ Quick Actions")
 actions = get_dynamic_actions(time_context)
-
 primary_action = actions[0]
-if st.button(primary_action[0], type="primary", use_container_width=True):
-    if primary_action[2]:
-        st.balloons()
-    st.toast(f"Launching {primary_action[0]}...", icon="🚀")
 
+# If the user clicks the primary action button, turn the scanner layout engine ON
+if st.button(primary_action[0], type="primary", use_container_width=True):
+    st.session_state.scanner_active = True
+
+# --- 🎫 THE SCANNER INTERFACE (Renders only when active) ---
+if st.session_state.scanner_active:
+    st.info("📷 **Ticket Scanner Active:** Hold your ticket's QR code or Barcode completely steady up to your camera.")
+    
+    uploaded_frame = st.camera_input("Scan Window", label_visibility="collapsed")
+    
+    if uploaded_frame:
+        pil_image = Image.open(uploaded_frame)
+        img_array = np.array(pil_image)
+        bgr_image = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        
+        # Initialize OpenCV QR Engine
+        detector = cv2.QRCodeDetector()
+        data, bbox, straight_qrcode = detector.detectAndDecode(bgr_image)
+        
+        if data:
+            st.success("🎉 **Barcode Read Successfully!**")
+            # Push the result straight into the assistant log automatically!
+            st.session_state.messages.append({"role": "user", "content": f"[Scanned Ticket Summary Data]: {data}"})
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": f"🎟️ **Ticket Processed:** I've parsed your seat details from the barcode entry token (**{data}**). Your optimized walking path turns left at Concession Corridor B straight up to Row 12."
+            })
+            st.balloons()
+            st.session_state.scanner_active = False # Close scanner on success
+            st.rerun()
+        else:
+            st.warning("⚠️ Scanner running, but no clear barcode alignment found yet. Please reposition the ticket.")
+
+    if st.button("🛑 Cancel Scan & Close Camera", use_container_width=True):
+        st.session_state.scanner_active = False
+        st.rerun()
+
+# Render remaining sub-action items underneath
 col1, col2 = st.columns(2)
 with col1:
     if st.button(actions[1][0], use_container_width=True):

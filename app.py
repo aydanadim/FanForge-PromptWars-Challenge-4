@@ -77,15 +77,18 @@ st.caption("Click the microphone button to speak naturally, or type below.")
 lang_codes = {"English": "en", "Spanish": "es", "French": "fr", "Hindi": "hi"}
 target_code = lang_codes.get(language, "en")
 
-# Unified Chat History
+# Initialize persistent session states if they don't exist
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "temp_voice_input" not in st.session_state:
+    st.session_state.temp_voice_input = None
 
+# Render the Chat History first so the conversation stays visible
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Render browser microphone interface (Zero Setup, Free Transcription)
+# Render browser microphone interface
 voice_text = speech_to_text(
     language=target_code,
     start_prompt="🎵 Tap to Speak",
@@ -95,24 +98,41 @@ voice_text = speech_to_text(
     key="voice_input"
 )
 
-# Listen for keyboard input as fallback
+# Catch the voice text when it returns and pin it to the session state
+if voice_text:
+    st.session_state.temp_voice_input = voice_text
+
+# --- 🎛️ VOICE REVIEW STEP (Your New Request!) ---
+if st.session_state.temp_voice_input:
+    st.info(f"🔍 **Voice Transcription Review**\n\nHere is what I heard in **{language}**:\n\n> *\"{st.session_state.temp_voice_input}\"*")
+    
+    col_send, col_clear = st.columns(2)
+    with col_send:
+        if st.button("✅ Confirm & Send", use_container_width=True):
+            # 1. Commit user query to chat
+            st.session_state.messages.append({"role": "user", "content": st.session_state.temp_voice_input})
+            
+            # 2. Generate simulated assistant response
+            ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
+            st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+            
+            # 3. Clear temporary buffer and refresh
+            st.session_state.temp_voice_input = None
+            st.rerun()
+            
+    with col_clear:
+        if st.button("❌ Clear / Retry", use_container_width=True):
+            st.session_state.temp_voice_input = None
+            st.rerun()
+
+# Text Input Fallback
 text_input = st.chat_input(f"Or type your query here... ({language})")
 
-# Resolve which input was given
-active_prompt = voice_text if voice_text else text_input
-
-if active_prompt:
-    # Display the query in chat
-    with st.chat_message("user"):
-        st.markdown(active_prompt)
-    st.session_state.messages.append({"role": "user", "content": active_prompt})
-    
-    # Process answer based on context
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
-        response_placeholder.markdown(ai_reply)
+if text_input:
+    st.session_state.messages.append({"role": "user", "content": text_input})
+    ai_reply = f"*(Processed in {language})* 📍 I heard your request! Based on your live location inside the venue, the nearest facilities matching your query are 40 meters away with normal capacity thresholds."
     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+    st.rerun()
 
 st.divider()
 

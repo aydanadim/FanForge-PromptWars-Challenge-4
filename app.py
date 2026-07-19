@@ -180,84 +180,94 @@ if text_input:
 st.divider()
 
 # --- 6. DYNAMIC QUICK ACTIONS & INTEGRATED TICKET SCANNER ---
+# --- 6. DYNAMIC QUICK ACTIONS & INTEGRATED TICKET SCANNER ---
 st.markdown("### ⚡ Quick Actions")
 actions = get_dynamic_actions(time_context)
 primary_action = actions[0]
 
-# If the user clicks the primary action button, turn the scanner layout engine ON
+# Initialize map view session state if it doesn't exist
+if "current_map_view" not in st.session_state:
+    st.session_state.current_map_view = None
+if "scanner_active" not in st.session_state:
+    st.session_state.scanner_active = False
+
+# 1. Primary "Find My Seat" Scan Button
 if st.button(primary_action[0], type="primary", use_container_width=True):
     st.session_state.scanner_active = True
+    st.session_state.current_map_view = None  # Clear open maps when scanning
+
+# 2. Side-by-Side Map Buttons (Right below the red scan button)
+col_map1, col_map2 = st.columns(2)
+with col_map1:
+    if st.button("🍔 Concessions Map", use_container_width=True):
+        st.session_state.current_map_view = "concessions"
+        st.session_state.scanner_active = False  # Close scanner if viewing map
+with col_map2:
+    if st.button("👕 Merchandise Map", use_container_width=True):
+        st.session_state.current_map_view = "merchandise"
+        st.session_state.scanner_active = False  # Close scanner if viewing map
+
+# --- MAP DISPLAY CONTAINER ---
+if st.session_state.current_map_view == "concessions":
+    st.write("---")
+    st.subheader("🍔 Major Public Gate Concessions Map")
+    st.image(
+        "https://raw.githubusercontent.com/aydanadim/FanForge-PromptWars-Challenge-4/8f7b0375e747f0a9a54b8481905c8e1d11d57a64/Gemini_Generated_Image_8zemga8zemga8zem.png", 
+        use_container_width=True
+    )
+    if st.button("❌ Close Map", key="close_concessions", use_container_width=True):
+        st.session_state.current_map_view = None
+        st.rerun()
+
+elif st.session_state.current_map_view == "merchandise":
+    st.write("---")
+    st.subheader("👕 Major Public Gate Merchandise Map")
+    st.image(
+        "https://raw.githubusercontent.com/aydanadim/FanForge-PromptWars-Challenge-4/8f7b0375e747f0a9a54b8481905c8e1d11d57a64/Gemini_Generated_Image_bhrqwfbhrqwfbhrq.png", 
+        use_container_width=True
+    )
+    if st.button("❌ Close Map", key="close_merchandise", use_container_width=True):
+        st.session_state.current_map_view = None
+        st.rerun()
 
 # --- 🎫 THE SCANNER INTERFACE (Renders only when active) ---
-# Add this import to the very top of your app.py
-from pyzbar.pyzbar import decode
-
-# ... (rest of your app code) ...
-
-# --- 🎫 THE SCANNER INTERFACE (Updated for 1D Barcodes) ---
-# --- 🎫 THE SCANNER INTERFACE (Updated with Gate Logic) ---
 if st.session_state.scanner_active:
+    st.write("---")
     st.info("📷 **Ticket Scanner Active:** Hold your 6-digit barcode completely steady up to your camera.")
     
     uploaded_frame = st.camera_input("Scan Window", label_visibility="collapsed")
     
     if uploaded_frame:
         pil_image = Image.open(uploaded_frame)
-        
-        # Decode the 1D Barcode using pyzbar
         decoded_objects = decode(pil_image)
         
         if decoded_objects:
             st.success("🎉 **Barcode Read Successfully!**")
-            
-            # Extract the raw string from the barcode
             raw_data = decoded_objects[0].data.decode('utf-8')
             
-            # Apply 6-digit slicing logic
             if len(raw_data) == 6 and raw_data.isdigit():
-                # Slice 1: Separate Section and Seat
                 section_num = raw_data[:3]
                 seat_num = raw_data[3:]
-                
-                # Slice 2: Grab the last two digits of the section to determine location
                 section_slice = int(section_num[1:]) 
                 
-                # Route the fan based on the section slice
                 if 1 <= section_slice <= 10:
-                    direction = "North Side"
-                    gate = "Gate A"
+                    direction, gate = "North Side", "Gate A"
                 elif 11 <= section_slice <= 20:
-                    direction = "East Side"
-                    gate = "Gate B"
+                    direction, gate = "East Side", "Gate B"
                 elif 21 <= section_slice <= 30:
-                    direction = "South Side"
-                    gate = "Gate C"
+                    direction, gate = "South Side", "Gate C"
                 elif 31 <= section_slice <= 40:
-                    direction = "West Side"
-                    gate = "Gate D"
+                    direction, gate = "West Side", "Gate D"
                 else:
-                    # Fallback for VIP or edge-case sections
-                    direction = "Main Concourse"
-                    gate = "VIP Gate E"
+                    direction, gate = "Main Concourse", "VIP Gate E"
                 
-                # Build the dynamic response
-                final_output = f"Your seat number is {seat_num} in section {section_num}. Based on your section, please proceed to the **{direction}** and enter through **{gate}** for the fastest route to your seat."
+                final_output = f"Your seat number is {seat_num} in section {section_num}. Based on your section, please proceed to the **{direction}** and enter through **{gate}**."
                 
-                # Push to the chat UI
                 st.session_state.messages.append({"role": "user", "content": f"[Scanned Barcode]: {raw_data}"})
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": f"🎟️ **Ticket Processed:** {final_output}"
-                })
-                
-                # Optionally, save this to session state so the AI Remembers it later!
+                st.session_state.messages.append({"role": "assistant", "content": f"🎟️ **Ticket Processed:** {final_output}"})
                 st.session_state.user_gate = gate 
-                
             else:
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": f"🎟️ **Ticket Processed:** Raw data found: {raw_data}."
-                })
+                st.session_state.messages.append({"role": "assistant", "content": f"🎟️ **Ticket Processed:** Raw data found: {raw_data}."})
                 
             st.balloons()
             st.session_state.scanner_active = False
@@ -269,7 +279,9 @@ if st.session_state.scanner_active:
         st.session_state.scanner_active = False
         st.rerun()
 
-# Render remaining sub-action items underneath
+st.divider()
+
+# Render remaining standard quick actions underneath
 col1, col2 = st.columns(2)
 with col1:
     if st.button(actions[1][0], use_container_width=True):

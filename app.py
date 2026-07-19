@@ -241,7 +241,7 @@ if st.session_state.scanner_active:
                     gate = "VIP Gate E"
                 
                 # Build the dynamic response
-                final_output = f"Your seat number is {seat_num} in section {section_num}. Based on your section, please proceed to the **{direction}** and enter through **{gate}**."
+                final_output = f"Your seat number is {seat_num} in section {section_num}. Based on your section, please proceed to the **{direction}** and enter through **{gate}** for the fastest route to your seat."
                 
                 # Push to the chat UI
                 st.session_state.messages.append({"role": "user", "content": f"[Scanned Barcode]: {raw_data}"})

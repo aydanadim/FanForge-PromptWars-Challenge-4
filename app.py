@@ -3,6 +3,8 @@ from streamlit_mic_recorder import speech_to_text
 import cv2
 import numpy as np
 from PIL import Image
+# Ensure pyzbar is imported if your scanner environment requires it
+from pyzbar.pyzbar import decode
 
 # --- 1. PAGE CONFIGURATION & CUSTOM CSS ---
 st.set_page_config(page_title="FanForge | FIFA 2026", page_icon="⚽", layout="wide")
@@ -11,7 +13,7 @@ st.markdown("""
     <style>
     .main {background-color: #FAFAFA;}
     .app-title {
-        font-size: 2.5rem;
+        font-size: 3.5rem; /* Increased from 2.5rem to make the logo text bigger */
         font-weight: 900;
         color: #111827;
         margin-bottom: 0px;
@@ -64,7 +66,7 @@ def get_smart_ai_response(prompt, language):
             "food": "🍔 **Alimentos:** El puesto C (a 2 min) tiene tiempo de espera cero para hot dogs y bebidas heladas.",
             "gate": "🚶 **Navegación:** La Puerta B está a 4 minutos a pie. El flujo de personas está despejado para una salida rápida.",
             "score": "⚽ **Actualización:** El marcador está 0-0 en el minuto 35. Las estadísticas se actualizan en vivo.",
-            "default": "🤖 **Motor FanForge:** ¡Recibী tu consulta! Buscando mapas logísticos en tiempo real para tu sección."
+            "default": "🤖 **Motor FanForge:** ¡Recibí tu consulta! Buscando mapas logísticos en tiempo real para tu sección."
         },
         "French": {
             "restroom": "🧻 **Localisateur:** Les toilettes les plus proches sont à 40 mètres derrière la Section 114. Aucune attente.",
@@ -179,7 +181,6 @@ if text_input:
 
 st.divider()
 
-# --- 6. DYNAMIC QUICK ACTIONS & INTEGRATED TICKET SCANNER ---
 # --- 6. DYNAMIC QUICK ACTIONS & INTEGRATED TICKET SCANNER ---
 st.markdown("### ⚡ Quick Actions")
 actions = get_dynamic_actions(time_context)

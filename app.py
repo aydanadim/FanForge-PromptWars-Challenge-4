@@ -195,6 +195,7 @@ from pyzbar.pyzbar import decode
 # ... (rest of your app code) ...
 
 # --- 🎫 THE SCANNER INTERFACE (Updated for 1D Barcodes) ---
+# --- 🎫 THE SCANNER INTERFACE (Updated with Gate Logic) ---
 if st.session_state.scanner_active:
     st.info("📷 **Ticket Scanner Active:** Hold your 6-digit barcode completely steady up to your camera.")
     
@@ -209,30 +210,57 @@ if st.session_state.scanner_active:
         if decoded_objects:
             st.success("🎉 **Barcode Read Successfully!**")
             
-            # Extract the raw string from the first detected barcode
+            # Extract the raw string from the barcode
             raw_data = decoded_objects[0].data.decode('utf-8')
             
-            # Apply your custom 6-digit engineering logic
+            # Apply 6-digit slicing logic
             if len(raw_data) == 6 and raw_data.isdigit():
+                # Slice 1: Separate Section and Seat
                 section_num = raw_data[:3]
                 seat_num = raw_data[3:]
                 
-                final_output = f"Your seat number is {seat_num} in section {section_num}"
+                # Slice 2: Grab the last two digits of the section to determine location
+                section_slice = int(section_num[1:]) 
                 
+                # Route the fan based on the section slice
+                if 1 <= section_slice <= 10:
+                    direction = "North Side"
+                    gate = "Gate A"
+                elif 11 <= section_slice <= 20:
+                    direction = "East Side"
+                    gate = "Gate B"
+                elif 21 <= section_slice <= 30:
+                    direction = "South Side"
+                    gate = "Gate C"
+                elif 31 <= section_slice <= 40:
+                    direction = "West Side"
+                    gate = "Gate D"
+                else:
+                    # Fallback for VIP or edge-case sections
+                    direction = "Main Concourse"
+                    gate = "VIP Gate E"
+                
+                # Build the dynamic response
+                final_output = f"Your seat number is {seat_num} in section {section_num}. Based on your section, please proceed to the **{direction}** and enter through **{gate}**."
+                
+                # Push to the chat UI
                 st.session_state.messages.append({"role": "user", "content": f"[Scanned Barcode]: {raw_data}"})
                 st.session_state.messages.append({
                     "role": "assistant", 
-                    "content": f"🎟️ **Ticket Processed:** {final_output}."
+                    "content": f"🎟️ **Ticket Processed:** {final_output}"
                 })
+                
+                # Optionally, save this to session state so the AI Remembers it later!
+                st.session_state.user_gate = gate 
+                
             else:
-                # Fallback just in case they scan a barcode with the wrong length
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": f"🎟️ **Ticket Processed:** Raw data found: {raw_data}."
                 })
                 
             st.balloons()
-            st.session_state.scanner_active = False # Close scanner on success
+            st.session_state.scanner_active = False
             st.rerun()
         else:
             st.warning("⚠️ Scanner running, but no clear barcode alignment found yet. Please reposition the ticket.")

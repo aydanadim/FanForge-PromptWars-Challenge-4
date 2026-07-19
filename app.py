@@ -189,28 +189,48 @@ if st.button(primary_action[0], type="primary", use_container_width=True):
     st.session_state.scanner_active = True
 
 # --- 🎫 THE SCANNER INTERFACE (Renders only when active) ---
+# Add this import to the very top of your app.py
+from pyzbar.pyzbar import decode
+
+# ... (rest of your app code) ...
+
+# --- 🎫 THE SCANNER INTERFACE (Updated for 1D Barcodes) ---
 if st.session_state.scanner_active:
-    st.info("📷 **Ticket Scanner Active:** Hold your ticket's QR code or Barcode completely steady up to your camera.")
+    st.info("📷 **Ticket Scanner Active:** Hold your 6-digit barcode completely steady up to your camera.")
     
     uploaded_frame = st.camera_input("Scan Window", label_visibility="collapsed")
     
     if uploaded_frame:
         pil_image = Image.open(uploaded_frame)
-        img_array = np.array(pil_image)
-        bgr_image = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
         
-        # Initialize OpenCV QR Engine
-        detector = cv2.QRCodeDetector()
-        data, bbox, straight_qrcode = detector.detectAndDecode(bgr_image)
+        # Decode the 1D Barcode using pyzbar
+        decoded_objects = decode(pil_image)
         
-        if data:
+        if decoded_objects:
             st.success("🎉 **Barcode Read Successfully!**")
-            # Push the result straight into the assistant log automatically!
-            st.session_state.messages.append({"role": "user", "content": f"[Scanned Ticket Summary Data]: {data}"})
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": f"🎟️ **Ticket Processed:** I've parsed your seat details from the barcode entry token (**{data}**). Your optimized walking path turns left at Concession Corridor B straight up to Row 12."
-            })
+            
+            # Extract the raw string from the first detected barcode
+            raw_data = decoded_objects[0].data.decode('utf-8')
+            
+            # Apply your custom 6-digit engineering logic
+            if len(raw_data) == 6 and raw_data.isdigit():
+                section_num = raw_data[:3]
+                seat_num = raw_data[3:]
+                
+                final_output = f"Your seat number is {seat_num} in section {section_num}"
+                
+                st.session_state.messages.append({"role": "user", "content": f"[Scanned Barcode]: {raw_data}"})
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": f"🎟️ **Ticket Processed:** {final_output}."
+                })
+            else:
+                # Fallback just in case they scan a barcode with the wrong length
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": f"🎟️ **Ticket Processed:** Raw data found: {raw_data}."
+                })
+                
             st.balloons()
             st.session_state.scanner_active = False # Close scanner on success
             st.rerun()
